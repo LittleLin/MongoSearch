@@ -1,4 +1,4 @@
 MongoSearch
 ===========
 
-A full-text engine using MongoDB as backend storage.
+A full-text search engine using MongoDB as backend storage.
