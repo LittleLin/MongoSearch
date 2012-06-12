@@ -1,10 +1,20 @@
 MongoSearch
 ===========
 
+About
+-----
 A full-text search engine using MongoDB as backend storage.
 
-Example Code
-------------
+
+Release Notes
+-------------
+
+* v0.01: http://mongosearch.tumblr.com/post/24956392458/release-v0-01
+
+
+Examples
+--------
+Some simple examples:
 
 ```csharp
 // 1. Create index repository and make index.
