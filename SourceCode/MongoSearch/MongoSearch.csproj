@@ -45,6 +45,9 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\mongocsharpdriver.1.4.2\lib\net35\MongoDB.Driver.dll</HintPath>
     </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.4.5.7\lib\net40\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -59,9 +62,13 @@
     <Compile Include="Library\Constants.cs" />
     <Compile Include="Library\MongoDbLib.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Repository.cs" />
     <Compile Include="Searcher.cs" />
+    <Compile Include="Structure\IndexedDoc.cs" />
     <Compile Include="Structure\InvertedIndex.cs" />
     <Compile Include="Structure\Pair.cs" />
+    <Compile Include="Structure\RepositoryInfo.cs" />
+    <Compile Include="Structure\SearchResult.cs" />
     <Compile Include="Structure\SourceDocument.cs" />
     <Compile Include="Structure\WordItem.cs" />
   </ItemGroup>

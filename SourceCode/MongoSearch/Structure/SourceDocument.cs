@@ -9,14 +9,23 @@ namespace MongoSearch.Structure
     /// <summary>
     /// 儲存原始文件的資訊
     /// </summary>
-    public class SourceDocument
+    public class SourceText
     {
         public ObjectId Id { get; set; }
 
+        /// <summary>
+        /// Doc Id
+        /// </summary>
         public Int32 DocId { get; set; }
-        public Int32 ParaId { get; set; }
-        public String Para { get; set; }
 
-        //public List<String> Paras { get; set; }
+        /// <summary>
+        /// Para Id
+        /// </summary>
+        public Int32 ParaId { get; set; }
+
+        /// <summary>
+        /// Para 內文
+        /// </summary>
+        public String Para { get; set; }
     }
 }

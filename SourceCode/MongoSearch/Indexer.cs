@@ -17,132 +17,137 @@ namespace MongoSearch
         /// <summary>
         /// MongoDB Server Address
         /// </summary>
-        public String ServerAddress { get; set; }
+        public String MongoDbServer { get; set; }
 
         /// <summary>
-        /// MongoDB Index Db Name
+        /// MongoDB Db Name
         /// </summary>
         public String DbName { get; set; }
 
-        private String srcDir;
-        public Indexer(String srcDir)
+        /// <summary>
+        /// 儲存所有索引庫資訊
+        /// </summary>
+        public Dictionary<String, Repository> Repositories { get; set; }
+
+        /// <summary>
+        /// private instance
+        /// </summary>
+        private static Indexer instance;
+
+        private Indexer()
         {
-            this.srcDir = srcDir;
-            this.ServerAddress = Constants.DefaultServerAddress;
+            this.MongoDbServer = Constants.DefaultServerAddress;
             this.DbName = Constants.DefaultDbName;
+            this.Repositories = new Dictionary<string, Repository>();
+
+            // 取得 repository 資訊列表
+            var server = MongoDbLib.GetServerConnection(MongoDbServer);            
+            var database = server.GetDatabase(DbName);
+            var tblRepos = database.GetCollection<RepositoryInfo>(Constants.TblRepository);
+            var repos = from r in tblRepos.AsQueryable<RepositoryInfo>()
+                        select r;
+            foreach (var aRepo in repos)
+            {
+                this.Repositories.Add(aRepo.Name, new Repository(this, aRepo.Name));
+            }
+        }
+
+        public static Indexer Instance
+        {
+            get
+            {
+                if (instance == null)
+                {
+                    instance = new Indexer();
+                }
+                return instance;
+            }
         }
 
         /// <summary>
-        /// 取得原始文件，並將文件中的原始全文資訊(Para) 存入 Storage 中
+        /// 新增索引庫
         /// </summary>
+        /// <param name="name"></param>
         /// <returns></returns>
-        public bool Fetch()
+        public Repository CreateRepository(String name)
         {
             try
             {
-                int docId = 0;
-                foreach (String aSrcFile in Directory.EnumerateFiles(srcDir))
+                if (this.Repositories.ContainsKey(name))
+                    return Repositories[name];
+                else
                 {
-                    String rawContent = File.ReadAllText(aSrcFile);
-                    String[] paras = rawContent.Split(new String[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-                    var server = MongoDbLib.GetServerConnection(ServerAddress);
-                    var database = server.GetDatabase(DbName);
-                    var collection = database.GetCollection<SourceDocument>(Constants.TblSourceText);
-
-                    for (int i = 0; i < paras.Length; i++)
+                    try
                     {
-                        var doc = new SourceDocument();
-                        doc.DocId = docId;
-                        doc.ParaId = i;
-                        doc.Para = paras[i];
-                        collection.Insert(doc);
+                        // 新增 repository 資訊
+                        Repository repo = new Repository(this, name);
+                        this.Repositories.Add(name, repo);
+
+                        // 將 repository 資訊寫入 MongoDB 中
+                        var server = MongoDbLib.GetServerConnection(MongoDbServer);
+                        var database = server.GetDatabase(DbName);
+                        var tblRepos = database.GetCollection<RepositoryInfo>(Constants.TblRepository);
+                        tblRepos.Insert(new RepositoryInfo()
+                        {
+                            Name = name
+                        });
+
+                        return repo;
                     }
-
-                    docId++;
+                    catch (Exception e)
+                    {
+                        // roll back
+                        if (this.Repositories.ContainsKey(name))
+                            this.Repositories.Remove(name);
+                        throw e;
+                    }
                 }
-
-                return true;
             }
             catch (Exception e)
             {
-                return false;
+                throw e;
             }
         }
 
-        public bool MakeIndex()
+        /// <summary>
+        /// 取得索引庫
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public Repository GetRepository(String name)
         {
             try
             {
-                // 1. 解文
-                Fetch();
-
-                // 2. 建索引
-                ChineseSegmentor segmentor = new ChineseSegmentor();
-                var server = MongoDbLib.GetServerConnection(ServerAddress);
-                var database = server.GetDatabase(DbName);
-                var tblSourceText = database.GetCollection<SourceDocument>(Constants.TblSourceText);
-
-                // 斷詞，處理每個 Token
-                var sourcees = from s in tblSourceText.AsQueryable<SourceDocument>()
-                               orderby s.DocId, s.ParaId
-                               select s;
-                Dictionary<String, InvertedIndex> fullIndexes = new Dictionary<String, InvertedIndex>();
-                InvertedIndex aIndex = null;
-                foreach (var aSourceText in sourcees)
-                {
-                    List<Pair<String, Int32>> result = segmentor.SegWords(aSourceText.Para);
-                    foreach (var aToken in result)
-                    {
-                        if (fullIndexes.ContainsKey(aToken.First))
-                        {
-                            aIndex = fullIndexes[aToken.First];
-                        }
-                        else
-                        {
-                            aIndex = new InvertedIndex();
-                            aIndex.Word = aToken.First;
-                        }
-
-                        aIndex.Indexes.Add(new IndexElement()
-                        {
-                            DocId = aSourceText.DocId,
-                            ParaId = aSourceText.ParaId,
-                            Offset = aToken.Second
-                        });
-
-                        fullIndexes[aToken.First] = aIndex;
-                    }
-                }
-
-                // 在 Storage 存入 Word List
-                var wordListCollection = database.GetCollection(Constants.TblWordList);
-                List<BsonDocument> batch = new List<BsonDocument>();
-                List<String> wordList = fullIndexes.Keys.ToList();
-                for (int wordId = 0; wordId < fullIndexes.Count; wordId++)
-                {
-                    aIndex = fullIndexes[wordList[wordId]];
-                    aIndex.WordId = wordId;
-
-                    batch.Add(new BsonDocument()
-                        {
-                            { "Word", wordList[wordId] },
-                            { "WordId", wordId}
-                        });
-                }
-
-                wordListCollection.InsertBatch(batch);
-
-                // 儲存全文索引
-                var tblFullText = database.GetCollection(Constants.TblFullText);
-                List<InvertedIndex> fullText = new List<InvertedIndex>();
-                tblFullText.InsertBatch<InvertedIndex>(fullIndexes.Values.ToList());
-
-                return true;
+                if (this.Repositories.ContainsKey(name))
+                    return Repositories[name];
+                else
+                    return null;
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.StackTrace);
+                throw e;
+            }
+        }
+
+        /// <summary>
+        /// 刪除索引庫
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public bool DeleteRepository(String name)
+        {
+            try
+            {
+                var server = MongoDbLib.GetServerConnection(MongoDbServer);
+                var database = server.GetDatabase(DbName);
+                database.DropCollection(Constants.TblFullText);
+                database.DropCollection(Constants.TblSourceText);
+                database.DropCollection(Constants.TblWordList);
+
+                return true;
+            }
+            catch
+            {
                 return false;
             }
         }
